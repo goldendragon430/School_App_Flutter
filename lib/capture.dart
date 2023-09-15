@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:flutter_dropdown_alert/alert_controller.dart';
-import 'package:flutter_dropdown_alert/model/data_alert.dart';
+import 'package:gramapict/result.dart';
+import 'dart:math';
 import 'package:image_picker/image_picker.dart';
 
 class CaptureView extends StatefulWidget {
@@ -13,10 +13,15 @@ class CaptureView extends StatefulWidget {
   _CaptureView createState() => _CaptureView();
 }
 class  _CaptureView extends State<CaptureView> {
-  bool flag = false;
+  bool flag = true;
   XFile? teacherFile;
   XFile? studentFile;
+  String scoreString = '';
   final dio = Dio();
+  String result_img_1 = '';
+  String result_img_2 = '';
+  List<dynamic> result_1_array = [];
+  List<dynamic> result_2_array = [];
   @override
   void initState() {
     super.initState();
@@ -26,6 +31,19 @@ class  _CaptureView extends State<CaptureView> {
     // Dispose of the controller when the widget is disposed.
     super.dispose();
   }
+
+  String generateRandomString(int length) {
+    const String charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final Random random = Random();
+    String result = '';
+
+    for (int i = 0; i < length; i++) {
+      final randomIndex = random.nextInt(charset.length);
+      result += charset[randomIndex];
+    }
+
+    return result;
+  }
   Future checkPhotos() async {
     setState(() {
       flag = true;
@@ -33,20 +51,45 @@ class  _CaptureView extends State<CaptureView> {
     try{
       if(teacherFile == null || studentFile == null)
         return;
-      final formData = FormData.fromMap({
-        'teach_file': await MultipartFile.fromFile(teacherFile!.path ,filename: teacherFile!.name),
-        'student_file': await MultipartFile.fromFile(studentFile!.path ,filename: studentFile!.name),
+      setState(() {
+        flag = false;
       });
-      print(formData);
-      // final response = await dio.post('http://137.184.0.54:8000/img', data: formData);
-      // if(response.data['result'] == 'InValid Input Image'){
-      //   AlertController.show('Error', 'Invalid Input Image', TypeAlert.error);
-      // }else{
-      //   setState(() {
-      //     // generatedImg = response.data['result'];
-      //     // generatedTxt = response.data['txt'];
-      //   });
-      // }
+      final formData = FormData.fromMap({
+        'teach_file': await MultipartFile.fromFile(teacherFile!.path ,filename: generateRandomString(10) + '.png' ),
+        'student_file': await MultipartFile.fromFile(studentFile!.path ,filename: generateRandomString(10) + '.png'),
+      });
+
+      final response = await dio.post('http://109.123.231.170:8000', data: formData);
+      if(response.data['result'] == 'InValid Input Image'){
+
+      }else{
+
+          final result1 = response.data['result1'];
+          final result2 = response.data['result2'];
+          final url1 = response.data['url1'];
+          final url2 = response.data['url2'];
+
+          String img_url_1 = 'http://109.123.231.170:8000/?filename=$url1';
+          String img_url_2 = 'http://109.123.231.170:8000/?filename=$url2';
+
+          int count = 0;
+          for(int i = 0 ; i < 25; i ++){
+            if (result1[i]== result2[i]) count ++;
+          }
+
+          double d = (count * 10 / 25).toDouble();
+          double roundedD = double.parse(d.toStringAsFixed(2));
+          setState(() {
+            scoreString = 'Score: ${(roundedD).toDouble()} ($count/25)';
+            result_img_1 = img_url_1;
+            result_img_2 = img_url_2;
+            result_1_array = result1 ;
+            result_2_array = result2 ;
+          });
+      }
+      setState(() {
+        flag = true;
+      });
     }catch(e){
       print('error caught: $e');
     }
@@ -57,7 +100,7 @@ class  _CaptureView extends State<CaptureView> {
     if (pickedFile != null) {
       setState(() {
         teacherFile = pickedFile;
-
+        result_img_1 = '';
       });
 
     }
@@ -68,6 +111,7 @@ class  _CaptureView extends State<CaptureView> {
     if (pickedFile != null) {
       setState(() {
         studentFile = pickedFile;
+        result_img_2 = '';
       });
     }
 
@@ -79,14 +123,14 @@ class  _CaptureView extends State<CaptureView> {
       Scaffold(
         appBar: AppBar(
           centerTitle: true,
-          title: const Text('Upload Image'),
+          title: const Text('Analyze Test'),
         ), //AppBar
         body:
             Column(
               children: [
                 Expanded(child: Container(
                 width: MediaQuery.of(context).size.width - 20,
-                child: ListView(
+                child: flag == false ? Center(child:CircularProgressIndicator()) : ListView(
                   children: [
                     SizedBox(
                       width: screenWidth - 20,
@@ -97,7 +141,7 @@ class  _CaptureView extends State<CaptureView> {
                               fontSize: 20
                           )),
                           GestureDetector(
-                            child: teacherFile == null ? Image.asset('assets/teacher.png',width: 180) : Image.file(File(teacherFile!.path),width: screenWidth - 20),
+                            child: teacherFile == null ? Image.asset('assets/teacher.png',width: 180) : (result_img_1 == '' ? Image.file(File(teacherFile!.path),width: screenWidth - 20) : Image.network(result_img_1)),
                             onTap: pickTeacherFile,
                           )
 
@@ -113,7 +157,7 @@ class  _CaptureView extends State<CaptureView> {
                                 fontSize: 20
                             )),
                             GestureDetector(
-                              child: studentFile == null ? Image.asset('assets/student.png',width: 180) : Image.file(File(studentFile!.path),width: screenWidth - 20),
+                              child: studentFile == null ? Image.asset('assets/student.png',width: 180) : (result_img_2 == '' ? Image.file(File(studentFile!.path),width: screenWidth - 20) : Image.network(result_img_2)),
                               onTap: pickStudentFile,
                             )
                           ],
@@ -122,7 +166,7 @@ class  _CaptureView extends State<CaptureView> {
                   ],
                 )
                 )),
-                if(flag == true) Center(child: Text('Score: 10 (25/25)',style: TextStyle(color: Colors.blue),)),
+                if(flag == true) Center(child: Text(scoreString,style: TextStyle(color: Colors.blue),)),
                 SizedBox(height: 5),
                 Center(child: Container(
                   width: MediaQuery.of(context).size.width - 20, // Set the desired width here
@@ -154,7 +198,12 @@ class  _CaptureView extends State<CaptureView> {
                       foregroundColor: Colors.white, // Set the desired font color
                     ),
                     onPressed: (){
+                      if(result_1_array.length == 0 || result_2_array.length == 0) {
+                        return;
+                      }
 
+                      Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => ResultView(result1: result_1_array, result2: result_2_array)));
                     },
                     child: Text('Download as CSV',style: TextStyle(fontSize: 16)),
                   ),
